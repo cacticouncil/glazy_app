@@ -23,6 +23,7 @@ namespace ASTEM_DB.ViewModels
     public class MainWindowViewModel : ViewModelBase
     {
         private readonly DatabaseService _db = new();
+        private readonly SearchService _searchService = new();
         private ObservableCollection<CardItemViewModel> _cardItems = new ObservableCollection<CardItemViewModel>();
         public ObservableCollection<CardItemViewModel> CardItems
         {
@@ -236,6 +237,13 @@ namespace ASTEM_DB.ViewModels
             set => this.RaiseAndSetIfChanged(ref _aiResolvedSearchPrompt, value);
         }
 
+        private bool _aiIsImageSearching;
+        public bool AiIsImageSearching
+        {
+            get => _aiIsImageSearching;
+            set => this.RaiseAndSetIfChanged(ref _aiIsImageSearching, value);
+        }
+
         private string _aiSearchImagePath = string.Empty;
         public string AiSearchImagePath
         {
@@ -299,7 +307,7 @@ namespace ASTEM_DB.ViewModels
                 var response = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 var idToScore = response.Results.ToDictionary(result => result.Id, result => result.FinalScore);
-                var items = await _db.GetCardItemsByIdsAsync(response.Results.Select(result => result.Id));
+                var items = await Task.WhenAll(response.Results.Select(result => _db.GetCardItemByIdAsync(result.Id)));
                 cancellationToken.ThrowIfCancellationRequested();
 
                 CardItems.Clear();
@@ -356,7 +364,7 @@ namespace ASTEM_DB.ViewModels
             }
         }
 
-        public void SetPendingAiSearchImage(string imagePath)
+        public async void SetPendingAiSearchImage(string imagePath)
         {
             if (string.IsNullOrWhiteSpace(imagePath))
                 return;
@@ -364,8 +372,42 @@ namespace ASTEM_DB.ViewModels
             var fileName = Path.GetFileName(imagePath);
             AiSearchImagePath = imagePath;
             AiSearchImageLabel = $"Image: {fileName}";
-            AiSearchStatus = "Image selected. The visual image-search ranking pipeline is not connected yet.";
+            AiSearchStatus = "Image selected. Searching...";
+            CardItems.Clear();
             AiChatMessages.Add(new AiChatMessageViewModel("You", $"Image: {fileName}"));
+
+            try 
+            {
+                AiIsImageSearching = true;
+                var matches = await _searchService.SearchByImageAsync(AiSearchImagePath);
+               
+                if (!matches.Any())
+                {
+                    AiSearchStatus = "No matches found. Make sure tiles have been uploaded.";
+                    IsFilterEmpty = true;
+                    return;
+                }
+               
+                IsFilterEmpty = false;
+                AiSearchStatus = $"Found {matches.Count} similar tile{(matches.Count != 1 ? "s" : "")}";
+                
+                foreach (var match in matches)
+                {
+                    var card = await _db.GetCardItemByIdAsync(match.TileId);
+                    if (card != null)
+                        CardItems.Add(card);
+                }
+            }
+
+            catch (Exception ex)
+            {
+                AiSearchStatus = $"Image search failed: {ex.Message}";
+                Console.WriteLine($"Image search error: {ex}");
+            }
+            finally
+            {
+                AiIsImageSearching = false;
+            }
         }
 
         public void SetAiSearchImageSelectionError(string message)

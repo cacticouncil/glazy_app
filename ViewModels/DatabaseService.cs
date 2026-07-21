@@ -279,54 +279,34 @@ namespace ASTEM_DB.Services
             return null;
         }
 
-        public async Task<List<CardItemViewModel>> GetCardItemsByIdsAsync(IEnumerable<string> ids)
+        // Used by image search to load a full tile record by its ID
+        public async Task<CardItemViewModel?> GetCardItemByIdAsync(string id)
         {
-            var idList = ids
-                .Select(id => id.Trim())
-                .Where(id => uint.TryParse(id, out _))
-                .Distinct()
-                .ToList();
-
-            if (idList.Count == 0)
-                return new List<CardItemViewModel>();
-
             await using var conn = new MySqlConnection(_connectionString);
             await conn.OpenAsync();
 
-            var parameterNames = idList.Select((_, index) => $"@id{index}").ToList();
-            string query = $@"
-        SELECT 
-            tp.ID,
-            tp.Image,
-            tp.Color_L,
-            tp.Color_A,
-            tp.Color_B,
-            tp.FiringType,
-            tp.SoilType,
-            tp.ChemicalComposition,
-            tp.AutoTags,
-            tp.AutoKeywords,
-            gt.Name AS GlazeType,
-            sc.Name AS SurfaceCondition
-        FROM testpiece tp
-        LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
-        LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
-        WHERE tp.ID IN ({string.Join(", ", parameterNames)});
-    ";
+            string query = @"
+                SELECT tp.ID, tp.Image, tp.Color_L, tp.Color_A, tp.Color_B,
+                       tp.FiringType, tp.SoilType, tp.ChemicalComposition,
+                       gt.Name AS GlazeType, sc.Name AS SurfaceCondition
+                FROM testpiece tp
+                LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
+                LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
+                WHERE tp.ID = @Id
+                LIMIT 1";
 
             await using var cmd = new MySqlCommand(query, conn);
-            for (int i = 0; i < idList.Count; i++)
-                cmd.Parameters.AddWithValue(parameterNames[i], idList[i]);
-
-            var itemById = new Dictionary<string, CardItemViewModel>();
+            cmd.Parameters.AddWithValue("@Id", id);
             await using var reader = await cmd.ExecuteReaderAsync();
 
-            while (await reader.ReadAsync())
+            if (await reader.ReadAsync())
             {
-                var id = reader["ID"].ToString()!;
-                var item = new CardItemViewModel
+                byte[] imageBytes = (byte[])reader["Image"];
+                using var memoryStream = new MemoryStream(imageBytes);
+                return new CardItemViewModel
                 {
-                    Id = id,
+                    Id = reader["ID"].ToString()!,
+                    Image = new Bitmap(memoryStream),
                     GlazeType = reader["GlazeType"].ToString() ?? "Unknown",
                     SurfaceCondition = reader["SurfaceCondition"].ToString() ?? "Unknown",
                     ColorL = Convert.ToDouble(reader["Color_L"]),
@@ -335,24 +315,10 @@ namespace ASTEM_DB.Services
                     Lab = $"{reader["Color_L"]}, {reader["Color_A"]}, {reader["Color_B"]}",
                     FiringType = reader["FiringType"].ToString() ?? "",
                     SoilType = reader["SoilType"].ToString() ?? "",
-                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? "",
-                    AutoTags = reader["AutoTags"].ToString() ?? "",
-                    AutoKeywords = reader["AutoKeywords"].ToString() ?? ""
+                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? ""
                 };
-
-                if (reader["Image"] is byte[] imageBytes && imageBytes.Length > 0)
-                {
-                    using var memoryStream = new MemoryStream(imageBytes);
-                    item.Image = new Avalonia.Media.Imaging.Bitmap(memoryStream);
-                }
-
-                itemById[id] = item;
             }
-
-            return idList
-                .Where(itemById.ContainsKey)
-                .Select(id => itemById[id])
-                .ToList();
+            return null;
         }
     }
 }
