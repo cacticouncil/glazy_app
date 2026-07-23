@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 
 namespace ASTEM_DB.Views
 {
@@ -12,8 +13,14 @@ namespace ASTEM_DB.Views
         public MainWindow()
         {
             InitializeComponent();
-            DataContext = new MainWindowViewModel();
-
+            var viewModel = new MainWindowViewModel();
+            DataContext = viewModel;
+            viewModel.AiChatMessages.CollectionChanged += (_, _) =>
+                DispatcherTimer.RunOnce(
+                    () => AiChatScrollViewer.ScrollToEnd(),
+                    TimeSpan.FromMilliseconds(1),
+                    DispatcherPriority.Background
+                );
         }
         private void OnCardClicked(object? sender, RoutedEventArgs e)
         {
@@ -60,7 +67,7 @@ namespace ASTEM_DB.Views
 
                 var selected = files[0];
                 var imagePath = selected.Path.IsFile ? selected.Path.LocalPath : selected.Name;
-                vm.SetPendingAiSearchImage(imagePath);
+                await vm.SetPendingAiSearchImageAsync(imagePath);
             }
             catch (Exception ex)
             {

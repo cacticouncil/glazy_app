@@ -17,6 +17,76 @@
     <Design.DataContext>
         <vm:MainWindowViewModel />
     </Design.DataContext>
+
+    <Window.Styles>
+        <Style Selector="Border.aiHeader">
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#DCE3E8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="Border.aiChat">
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="Background" Value="#EEF2F4" />
+            <Setter Property="BorderBrush" Value="#DCE3E8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="Border.chatBubble">
+            <Setter Property="MaxWidth" Value="285" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="Border.chatBubble.assistant">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#D7DEE3" />
+        </Style>
+        <Style Selector="Border.chatBubble.user">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Background" Value="#176B87" />
+            <Setter Property="BorderBrush" Value="#176B87" />
+        </Style>
+        <Style Selector="Border.chatBubble.assistant TextBlock">
+            <Setter Property="Foreground" Value="#20272B" />
+        </Style>
+        <Style Selector="Border.chatBubble.user TextBlock">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="TextBlock.chatSender">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="DemiBold" />
+            <Setter Property="Opacity" Value="0.78" />
+        </Style>
+        <Style Selector="Border.aiComposer">
+            <Setter Property="Padding" Value="9" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#CBD5DB" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="TextBox.aiPrompt">
+            <Setter Property="MinHeight" Value="52" />
+            <Setter Property="Padding" Value="2" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.aiButton">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Button.aiButton.primary">
+            <Setter Property="Background" Value="#176B87" />
+            <Setter Property="BorderBrush" Value="#176B87" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="FontWeight" Value="DemiBold" />
+        </Style>
+    </Window.Styles>
+
     <Grid ColumnDefinitions="400,*,200" RowDefinitions="*">
 
         <!--  Left Sidebar  -->
@@ -83,50 +153,64 @@
                     FontSize="20"
                     FontWeight="DemiBold"
                     Header="AI Search">
-                    <Grid Margin="10,30,10,10" RowDefinitions="Auto,*,Auto,Auto,Auto">
-                        <StackPanel Grid.Row="0" Spacing="6">
-                            <TextBlock
-                                FontSize="14"
-                                FontWeight="DemiBold"
-                                Text="AI Chat Search" />
-                            <TextBlock
-                                Text="{Binding AiSearchStatus}"
-                                TextWrapping="Wrap" />
-                            <TextBlock
-                                FontStyle="Italic"
-                                Text="{Binding AiResolvedSearchPrompt}"
-                                TextWrapping="Wrap" />
-                            <TextBlock
-                                FontSize="12"
-                                Text="{Binding AiSearchImageLabel}"
-                                TextWrapping="Wrap" />
-                        </StackPanel>
+                    <Grid
+                        Margin="10,24,10,10"
+                        Background="#F5F7F8"
+                        RowDefinitions="Auto,*,Auto">
+                        <Border Grid.Row="0" Classes="aiHeader">
+                            <StackPanel Spacing="7">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Border
+                                            Width="8"
+                                            Height="8"
+                                            VerticalAlignment="Center"
+                                            Background="#D9843B"
+                                            CornerRadius="4" />
+                                        <TextBlock
+                                            FontSize="15"
+                                            FontWeight="DemiBold"
+                                            Text="Find with AI" />
+                                    </StackPanel>
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        FontSize="11"
+                                        Foreground="#5F6B72"
+                                        Text="{Binding AiStrictnessLabel}" />
+                                </Grid>
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="#46545C"
+                                    Text="{Binding AiSearchStatus}"
+                                    TextWrapping="Wrap" />
+                                <ProgressBar
+                                    Height="3"
+                                    IsIndeterminate="True"
+                                    IsVisible="{Binding IsAiSearchLoading}" />
+                            </StackPanel>
+                        </Border>
 
                         <Border
                             Grid.Row="1"
-                            Margin="0,12,0,8"
-                            Padding="8"
-                            Background="#FFFFFF"
-                            BorderBrush="#D0D0D0"
-                            BorderThickness="1"
-                            CornerRadius="6">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            Margin="0,10"
+                            Classes="aiChat">
+                            <ScrollViewer
+                                x:Name="AiChatScrollViewer"
+                                VerticalScrollBarVisibility="Auto">
                                 <ItemsControl ItemsSource="{Binding AiChatMessages}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:AiChatMessageViewModel">
                                             <Border
-                                                Margin="0,0,0,8"
-                                                Padding="8"
-                                                Background="#F8F8F8"
-                                                BorderBrush="#E0E0E0"
-                                                BorderThickness="1"
-                                                CornerRadius="4">
+                                                Classes.assistant="{Binding IsFromAssistant}"
+                                                Classes.user="{Binding IsFromUser}"
+                                                Classes="chatBubble">
                                                 <StackPanel Spacing="3">
                                                     <TextBlock
-                                                        FontSize="12"
-                                                        FontWeight="DemiBold"
+                                                        Classes="chatSender"
                                                         Text="{Binding Sender}" />
                                                     <TextBlock
+                                                        FontSize="13"
                                                         Text="{Binding Message}"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
@@ -137,79 +221,85 @@
                             </ScrollViewer>
                         </Border>
 
-                        <TextBox
+                        <Border
                             Grid.Row="2"
-                            MinHeight="78"
-                            AcceptsReturn="True"
-                            Text="{Binding AiSearchPrompt, Mode=TwoWay}"
-                            TextWrapping="Wrap"
-                            Watermark="give me something brown" />
+                            Classes="aiComposer">
+                            <StackPanel Spacing="6">
+                                <TextBox
+                                    AcceptsReturn="True"
+                                    Classes="aiPrompt"
+                                    Text="{Binding AiSearchPrompt, Mode=TwoWay}"
+                                    TextWrapping="Wrap"
+                                    Watermark="Describe the tile you want..." />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="#65737A"
+                                    Text="{Binding AiSearchImageLabel}"
+                                    TextTrimming="CharacterEllipsis" />
 
-                        <StackPanel Grid.Row="3" Margin="0,8,0,0" Spacing="4">
-                            <Grid ColumnDefinitions="Auto,*">
-                                <TextBlock
-                                    FontSize="12"
-                                    FontWeight="DemiBold"
-                                    Text="Strictness" />
-                                <TextBlock
-                                    Grid.Column="1"
-                                    HorizontalAlignment="Right"
-                                    FontSize="12"
-                                    Text="{Binding AiStrictnessLabel}" />
-                            </Grid>
-                            <Slider
-                                Minimum="0"
-                                Maximum="2"
-                                TickFrequency="1"
-                                IsSnapToTickEnabled="True"
-                                Value="{Binding AiStrictnessLevelIndex, Mode=TwoWay}" />
-                            <Grid ColumnDefinitions="*,*,*">
-                                <TextBlock
-                                    FontSize="11"
-                                    Foreground="#666666"
-                                    Text="40%" />
-                                <TextBlock
-                                    Grid.Column="1"
-                                    HorizontalAlignment="Center"
-                                    FontSize="11"
-                                    Foreground="#666666"
-                                    Text="60%" />
-                                <TextBlock
-                                    Grid.Column="2"
-                                    HorizontalAlignment="Right"
-                                    FontSize="11"
-                                    Foreground="#666666"
-                                    Text="75%" />
-                            </Grid>
-                        </StackPanel>
+                                <StackPanel Spacing="2">
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <TextBlock
+                                            FontSize="11"
+                                            FontWeight="DemiBold"
+                                            Foreground="#46545C"
+                                            Text="Match strictness" />
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            HorizontalAlignment="Right"
+                                            FontSize="11"
+                                            Foreground="#176B87"
+                                            Text="{Binding AiMinimumMatchPercent, StringFormat={}{0}% minimum}" />
+                                    </Grid>
+                                    <Slider
+                                        Minimum="0"
+                                        Maximum="2"
+                                        TickFrequency="1"
+                                        IsSnapToTickEnabled="True"
+                                        Value="{Binding AiStrictnessLevelIndex, Mode=TwoWay}" />
+                                    <Grid ColumnDefinitions="*,*,*">
+                                        <TextBlock
+                                            FontSize="10"
+                                            Foreground="#65737A"
+                                            Text="Loose" />
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            HorizontalAlignment="Center"
+                                            FontSize="10"
+                                            Foreground="#65737A"
+                                            Text="Balanced" />
+                                        <TextBlock
+                                            Grid.Column="2"
+                                            HorizontalAlignment="Right"
+                                            FontSize="10"
+                                            Foreground="#65737A"
+                                            Text="Strict" />
+                                    </Grid>
+                                </StackPanel>
 
-                        <Grid Grid.Row="4" Margin="0,8,0,0" ColumnDefinitions="*,Auto,Auto,Auto">
-                            <ProgressBar
-                                Grid.Column="0"
-                                Height="6"
-                                VerticalAlignment="Center"
-                                IsIndeterminate="True"
-                                IsVisible="{Binding IsAiSearchLoading}" />
-                            <Button
-                                Grid.Column="1"
-                                Width="76"
-                                Margin="8,0,0,0"
-                                Click="OnAiImageButtonClicked"
-                                Content="Image"
-                                ToolTip.Tip="Attach an image for visual search" />
-                            <Button
-                                Grid.Column="2"
-                                Width="76"
-                                Margin="8,0,0,0"
-                                Command="{Binding ResetAiConversationCommand}"
-                                Content="Reset" />
-                            <Button
-                                Grid.Column="3"
-                                Width="96"
-                                Margin="8,0,0,0"
-                                Command="{Binding AiSearchCommand}"
-                                Content="Send" />
-                        </Grid>
+                                <Grid ColumnDefinitions="Auto,Auto,*">
+                                    <Button
+                                        Grid.Column="0"
+                                        Classes="aiButton"
+                                        Click="OnAiImageButtonClicked"
+                                        Content="Search image"
+                                        ToolTip.Tip="Choose a tile image" />
+                                    <Button
+                                        Grid.Column="1"
+                                        Margin="8,0,0,0"
+                                        Classes="aiButton"
+                                        Command="{Binding ResetAiConversationCommand}"
+                                        Content="Reset" />
+                                    <Button
+                                        Grid.Column="2"
+                                        MinWidth="88"
+                                        HorizontalAlignment="Right"
+                                        Classes="aiButton primary"
+                                        Command="{Binding AiSearchCommand}"
+                                        Content="Search" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </TabItem>
             </TabControl>

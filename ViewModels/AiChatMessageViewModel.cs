@@ -24,5 +24,8 @@ namespace ASTEM_DB.ViewModels
             get => _message;
             set => this.RaiseAndSetIfChanged(ref _message, value);
         }
+
+        public bool IsFromUser => Sender == "You";
+        public bool IsFromAssistant => !IsFromUser;
     }
 }
