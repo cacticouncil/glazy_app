@@ -145,7 +145,45 @@
                             TextWrapping="Wrap"
                             Watermark="give me something brown" />
 
-                        <Grid Grid.Row="3" Margin="0,8,0,0" ColumnDefinitions="*,Auto,Auto,Auto">
+                        <StackPanel Grid.Row="3" Margin="0,8,0,0" Spacing="4">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="DemiBold"
+                                    Text="Strictness" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    FontSize="12"
+                                    Text="{Binding AiStrictnessLabel}" />
+                            </Grid>
+                            <Slider
+                                Minimum="0"
+                                Maximum="2"
+                                TickFrequency="1"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding AiStrictnessLevelIndex, Mode=TwoWay}" />
+                            <Grid ColumnDefinitions="*,*,*">
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="#666666"
+                                    Text="40%" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Center"
+                                    FontSize="11"
+                                    Foreground="#666666"
+                                    Text="60%" />
+                                <TextBlock
+                                    Grid.Column="2"
+                                    HorizontalAlignment="Right"
+                                    FontSize="11"
+                                    Foreground="#666666"
+                                    Text="75%" />
+                            </Grid>
+                        </StackPanel>
+
+                        <Grid Grid.Row="4" Margin="0,8,0,0" ColumnDefinitions="*,Auto,Auto,Auto">
                             <ProgressBar
                                 Grid.Column="0"
                                 Height="6"

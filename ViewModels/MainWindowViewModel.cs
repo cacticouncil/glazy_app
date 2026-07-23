@@ -257,6 +257,39 @@ namespace ASTEM_DB.ViewModels
             set => this.RaiseAndSetIfChanged(ref _isAiSearchLoading, value);
         }
 
+        private double _aiStrictnessLevelIndex;
+        public double AiStrictnessLevelIndex
+        {
+            get => _aiStrictnessLevelIndex;
+            set
+            {
+                var snapped = Math.Clamp(Math.Round(value), 0, 2);
+                if (_aiStrictnessLevelIndex == snapped)
+                    return;
+
+                _aiStrictnessLevelIndex = snapped;
+                this.RaisePropertyChanged(nameof(AiStrictnessLevelIndex));
+                this.RaisePropertyChanged(nameof(AiStrictnessLabel));
+                this.RaisePropertyChanged(nameof(AiMinimumMatchPercent));
+            }
+        }
+
+        public double AiMinimumMatchScore => AiStrictnessLevelIndex switch
+        {
+            >= 2 => 0.75,
+            >= 1 => 0.60,
+            _ => 0.40
+        };
+
+        public int AiMinimumMatchPercent => (int)Math.Round(AiMinimumMatchScore * 100);
+
+        public string AiStrictnessLabel => AiStrictnessLevelIndex switch
+        {
+            >= 2 => "Strict (75%+)",
+            >= 1 => "Balanced (60%+)",
+            _ => "Loose (40%+)"
+        };
+
         public ObservableCollection<AiChatMessageViewModel> AiChatMessages { get; } = new();
 
         private readonly List<string> _aiConversationColors = new();
@@ -298,8 +331,17 @@ namespace ASTEM_DB.ViewModels
 
                 var response = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                var idToScore = response.Results.ToDictionary(result => result.Id, result => result.FinalScore);
-                var items = await _db.GetCardItemsByIdsAsync(response.Results.Select(result => result.Id));
+                var minimumMatchScore = AiMinimumMatchScore;
+                var filteredResults = response.Results
+                    .Where(result => GetDisplayMatchScore(result) >= minimumMatchScore)
+                    .GroupBy(result => result.Id)
+                    .Select(group => group
+                        .OrderByDescending(GetDisplayMatchScore)
+                        .First())
+                    .ToList();
+                var resultById = filteredResults.ToDictionary(result => result.Id);
+                var idToScore = filteredResults.ToDictionary(result => result.Id, result => result.FinalScore);
+                var items = await _db.GetCardItemsByIdsAsync(filteredResults.Select(result => result.Id));
                 cancellationToken.ThrowIfCancellationRequested();
 
                 CardItems.Clear();
@@ -310,11 +352,11 @@ namespace ASTEM_DB.ViewModels
                 {
                     if (idToScore.TryGetValue(item.Id, out var score))
                     {
-                        var matchScore = response.Results.FirstOrDefault(result => result.Id == item.Id)?.MatchScore ?? 0;
+                        var matchScore = resultById.TryGetValue(item.Id, out var scoreResult) ? GetDisplayMatchScore(scoreResult) : 0;
                         item.AiScore = matchScore > 0 ? matchScore : score;
                     }
 
-                    if (response.Results.FirstOrDefault(result => result.Id == item.Id) is { } aiResult)
+                    if (resultById.TryGetValue(item.Id, out var aiResult))
                     {
                         item.AiClipScore = aiResult.ClipScore;
                         item.AiColorScore = aiResult.ColorScore;
@@ -332,13 +374,13 @@ namespace ASTEM_DB.ViewModels
 
                 IsFilterEmpty = CardItems.Count == 0;
                 AiSearchStatus = CardItems.Count == 0
-                    ? "No AI matches found in the local database."
-                    : $"Showing top {CardItems.Count} local AI matches from {response.SearchedRows} database tiles.";
+                    ? $"No AI matches found at {AiMinimumMatchPercent}%+ match strictness."
+                    : $"Showing {CardItems.Count} local AI matches at {AiMinimumMatchPercent}%+ from {response.SearchedRows} database tiles.";
                 AiChatMessages.Add(new AiChatMessageViewModel(
                     "Glazy",
                     CardItems.Count == 0
-                        ? $"No matches found for \"{resolvedPrompt}\"."
-                        : $"Showing {CardItems.Count} matches for \"{resolvedPrompt}\"."
+                        ? $"No matches found at {AiMinimumMatchPercent}%+ for \"{resolvedPrompt}\"."
+                        : $"Showing {CardItems.Count} matches at {AiMinimumMatchPercent}%+ for \"{resolvedPrompt}\"."
                 ));
             }
             catch (OperationCanceledException)
@@ -1254,6 +1296,11 @@ namespace ASTEM_DB.ViewModels
             }
             // Only assign if close enough
             return minDeltaE <= 30 ? colorName : "Other";
+        }
+
+        private static double GetDisplayMatchScore(AiSearchResult result)
+        {
+            return result.MatchScore > 0 ? result.MatchScore : result.FinalScore;
         }
 
         private sealed class AiSearchResponse
