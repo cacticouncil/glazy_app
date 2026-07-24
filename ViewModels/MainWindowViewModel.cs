@@ -188,6 +188,7 @@ namespace ASTEM_DB.ViewModels
             MarkAiWrongColorCommand = new AsyncCommand(() => SaveSelectedAiFeedbackAsync("bad", "wrong_color"));
             MarkAiHasDarkEdgesCommand = new AsyncCommand(() => SaveSelectedAiFeedbackAsync("bad", "has_dark_edges"));
             TrainAiRankingCommand = new AsyncCommand(TrainAiRankingAsync);
+            Localization.CultureChanged += (_, _) => RefreshLocalization();
 
             LoadData();
             Red = 185;
@@ -212,7 +213,10 @@ namespace ASTEM_DB.ViewModels
             {
                 CardItems.Clear();
                 IsFilterEmpty = true;
-                AiSearchStatus = $"Database unavailable: {CleanProcessMessage(ex.Message)}";
+                AiSearchStatus = Localization.Format(
+                    "StatusDatabaseUnavailable",
+                    CleanProcessMessage(ex.Message)
+                );
             }
         }
 
@@ -223,7 +227,7 @@ namespace ASTEM_DB.ViewModels
             set => this.RaiseAndSetIfChanged(ref _aiSearchPrompt, value);
         }
 
-        private string _aiSearchStatus = "AI search ready.";
+        private string _aiSearchStatus = Localization.Get("StatusAiReady");
         public string AiSearchStatus
         {
             get => _aiSearchStatus;
@@ -272,6 +276,7 @@ namespace ASTEM_DB.ViewModels
                 this.RaisePropertyChanged(nameof(AiStrictnessLevelIndex));
                 this.RaisePropertyChanged(nameof(AiStrictnessLabel));
                 this.RaisePropertyChanged(nameof(AiMinimumMatchPercent));
+                this.RaisePropertyChanged(nameof(AiMinimumMatchLabel));
             }
         }
 
@@ -283,12 +288,13 @@ namespace ASTEM_DB.ViewModels
         };
 
         public int AiMinimumMatchPercent => (int)Math.Round(AiMinimumMatchScore * 100);
+        public string AiMinimumMatchLabel => Localization.Format("MatchMinimum", AiMinimumMatchPercent);
 
         public string AiStrictnessLabel => AiStrictnessLevelIndex switch
         {
-            >= 2 => "Strict (75%+)",
-            >= 1 => "Balanced (60%+)",
-            _ => "Loose (40%+)"
+            >= 2 => Localization.Get("StrictnessStrict"),
+            >= 1 => Localization.Get("StrictnessBalanced"),
+            _ => Localization.Get("StrictnessLoose")
         };
 
         public ObservableCollection<AiChatMessageViewModel> AiChatMessages { get; } = new();
@@ -298,7 +304,7 @@ namespace ASTEM_DB.ViewModels
         private readonly List<string> _aiConversationFreeTerms = new();
         private readonly List<string> _aiConversationConstraints = new();
 
-        private string _aiTrainingStatus = "Select an AI result to label it.";
+        private string _aiTrainingStatus = Localization.Get("TrainingSelectResult");
         public string AiTrainingStatus
         {
             get => _aiTrainingStatus;
@@ -311,15 +317,15 @@ namespace ASTEM_DB.ViewModels
             if (string.IsNullOrWhiteSpace(prompt))
             {
                 AiSearchStatus = string.IsNullOrWhiteSpace(AiSearchImagePath)
-                    ? "Enter an AI search message first."
-                    : "Enter a message to refine the image results, or choose another image.";
+                    ? Localization.Get("StatusEnterPrompt")
+                    : Localization.Get("StatusEnterRefinement");
                 return;
             }
 
             _aiSearchCts?.Cancel();
             _aiSearchCts = new CancellationTokenSource();
             var cancellationToken = _aiSearchCts.Token;
-            var resolvedPrompt = ResolveAiConversationPrompt(prompt);
+            var resolvedPrompt = ResolveAiConversationPrompt(NormalizeJapanesePrompt(prompt));
 
             AiChatMessages.Add(new AiChatMessageViewModel("You", prompt));
             AiSearchPrompt = string.Empty;
@@ -328,7 +334,7 @@ namespace ASTEM_DB.ViewModels
             try
             {
                 IsAiSearchLoading = true;
-                AiSearchStatus = $"Searching for: {resolvedPrompt}";
+                AiSearchStatus = Localization.Format("StatusSearchingFor", resolvedPrompt);
 
                 var response = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -375,22 +381,32 @@ namespace ASTEM_DB.ViewModels
 
                 IsFilterEmpty = CardItems.Count == 0;
                 AiSearchStatus = CardItems.Count == 0
-                    ? $"No AI matches found at {AiMinimumMatchPercent}%+ match strictness."
-                    : $"Showing {CardItems.Count} local AI matches at {AiMinimumMatchPercent}%+ from {response.SearchedRows} database tiles.";
+                    ? Localization.Format("StatusNoAiMatches", AiMinimumMatchPercent)
+                    : Localization.Format(
+                        "StatusShowingLocalMatches",
+                        CardItems.Count,
+                        AiMinimumMatchPercent,
+                        response.SearchedRows
+                    );
                 AiChatMessages.Add(new AiChatMessageViewModel(
                     "Glazy",
                     CardItems.Count == 0
-                        ? $"No matches found at {AiMinimumMatchPercent}%+ for \"{resolvedPrompt}\"."
-                        : $"Showing {CardItems.Count} matches at {AiMinimumMatchPercent}%+ for \"{resolvedPrompt}\"."
+                        ? Localization.Format("ChatNoMatches", AiMinimumMatchPercent, resolvedPrompt)
+                        : Localization.Format(
+                            "ChatShowingMatches",
+                            CardItems.Count,
+                            AiMinimumMatchPercent,
+                            resolvedPrompt
+                        )
                 ));
             }
             catch (OperationCanceledException)
             {
-                AiSearchStatus = "AI search was canceled.";
+                AiSearchStatus = Localization.Get("StatusAiCanceled");
             }
             catch (Exception ex)
             {
-                AiSearchStatus = $"AI search failed: {ex.Message}";
+                AiSearchStatus = Localization.Format("StatusAiFailed", CleanProcessMessage(ex.Message));
                 AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
             }
             finally
@@ -406,9 +422,11 @@ namespace ASTEM_DB.ViewModels
 
             var fileName = Path.GetFileName(imagePath);
             AiSearchImagePath = imagePath;
-            AiSearchImageLabel = $"Image: {fileName}";
-            AiSearchStatus = "Image selected. Searching similar tiles...";
-            AiChatMessages.Add(new AiChatMessageViewModel("You", $"Image: {fileName}"));
+            AiSearchImageLabel = Localization.Format("ImageLabel", fileName);
+            AiSearchStatus = Localization.Get("StatusImageSearching");
+            AiChatMessages.Add(
+                new AiChatMessageViewModel("You", Localization.Format("ImageLabel", fileName))
+            );
 
             _aiSearchCts?.Cancel();
             _aiSearchCts = new CancellationTokenSource();
@@ -447,17 +465,24 @@ namespace ASTEM_DB.ViewModels
 
                 IsFilterEmpty = CardItems.Count == 0;
                 AiSearchStatus = CardItems.Count == 0
-                    ? $"No visually similar tiles found at {AiMinimumMatchPercent}%+ match strictness."
-                    : $"Showing {CardItems.Count} visually similar tile{(CardItems.Count == 1 ? "" : "s")} at {AiMinimumMatchPercent}%+.";
+                    ? Localization.Format("StatusNoVisualMatches", AiMinimumMatchPercent)
+                    : Localization.Format(
+                        "StatusShowingVisualMatches",
+                        CardItems.Count,
+                        AiMinimumMatchPercent
+                    );
                 AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
             }
             catch (OperationCanceledException)
             {
-                AiSearchStatus = "Image search was canceled.";
+                AiSearchStatus = Localization.Get("StatusImageCanceled");
             }
             catch (Exception ex)
             {
-                AiSearchStatus = $"Image search failed: {CleanProcessMessage(ex.Message)}";
+                AiSearchStatus = Localization.Format(
+                    "StatusImageFailed",
+                    CleanProcessMessage(ex.Message)
+                );
                 AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
             }
             finally
@@ -468,7 +493,10 @@ namespace ASTEM_DB.ViewModels
 
         public void SetAiSearchImageSelectionError(string message)
         {
-            AiSearchStatus = $"Image selection failed: {CleanProcessMessage(message)}";
+            AiSearchStatus = Localization.Format(
+                "StatusImageSelectionFailed",
+                CleanProcessMessage(message)
+            );
         }
 
         private void ResetAiConversation()
@@ -483,20 +511,20 @@ namespace ASTEM_DB.ViewModels
             AiSearchImagePath = string.Empty;
             AiSearchImageLabel = string.Empty;
             AiSearchPrompt = string.Empty;
-            AiSearchStatus = "AI search reset.";
+            AiSearchStatus = Localization.Get("StatusAiReset");
         }
 
         private async Task SaveSelectedAiFeedbackAsync(string label, string reason)
         {
             if (SelectedCard == null)
             {
-                AiTrainingStatus = "Select a tile result before labeling it.";
+                AiTrainingStatus = Localization.Get("TrainingSelectTile");
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(AiResolvedSearchPrompt))
             {
-                AiTrainingStatus = "Run an AI search before saving training feedback.";
+                AiTrainingStatus = Localization.Get("TrainingRunSearch");
                 return;
             }
 
@@ -532,13 +560,13 @@ namespace ASTEM_DB.ViewModels
 
             var labelText = reason switch
             {
-                "good_match" => "Good match saved",
-                "wrong_color" => "Wrong color saved",
-                "has_dark_edges" => "Dark edge issue saved",
-                _ => "Bad match saved"
+                "good_match" => Localization.Get("FeedbackGoodSaved"),
+                "wrong_color" => Localization.Get("FeedbackWrongColorSaved"),
+                "has_dark_edges" => Localization.Get("FeedbackDarkEdgeSaved"),
+                _ => Localization.Get("FeedbackBadSaved")
             };
             SelectedCard.AiFeedbackStatus = labelText;
-            AiTrainingStatus = $"{labelText}. Run Train Weights when you are ready.";
+            AiTrainingStatus = Localization.Format("TrainingReady", labelText);
         }
 
         private async Task TrainAiRankingAsync()
@@ -568,7 +596,7 @@ namespace ASTEM_DB.ViewModels
             startInfo.Environment["DB_USER"] = Environment.GetEnvironmentVariable("DB_USER") ?? "ceramadmin";
             startInfo.Environment["DB_PASSWORD"] = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "glazed-dev-password";
 
-            AiTrainingStatus = "Training ranking weights...";
+            AiTrainingStatus = Localization.Get("TrainingInProgress");
 
             using var process = Process.Start(startInfo)
                 ?? throw new InvalidOperationException("Could not start the AI ranking trainer.");
@@ -582,7 +610,10 @@ namespace ASTEM_DB.ViewModels
             if (process.ExitCode != 0)
             {
                 var message = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
-                AiTrainingStatus = $"Training failed: {CleanProcessMessage(message)}";
+                AiTrainingStatus = Localization.Format(
+                    "TrainingFailed",
+                    CleanProcessMessage(message)
+                );
                 return;
             }
 
@@ -596,8 +627,109 @@ namespace ASTEM_DB.ViewModels
 
             var examples = response?.Metrics?.Examples ?? 0;
             var accuracy = response?.Metrics?.Accuracy ?? 0;
-            AiTrainingStatus = $"Training complete: {examples} examples, {accuracy:P0} fit.";
+            AiTrainingStatus = Localization.Format("TrainingComplete", examples, accuracy);
         }
+
+        private void RefreshLocalization()
+        {
+            this.RaisePropertyChanged(nameof(AiStrictnessLabel));
+            this.RaisePropertyChanged(nameof(AiMinimumMatchLabel));
+
+            if (!IsAiSearchLoading)
+                AiSearchStatus = Localization.Get("StatusAiReady");
+
+            AiTrainingStatus = Localization.Get("TrainingSelectResult");
+
+            if (!string.IsNullOrWhiteSpace(AiSearchImagePath))
+            {
+                AiSearchImageLabel = Localization.Format(
+                    "ImageLabel",
+                    Path.GetFileName(AiSearchImagePath)
+                );
+            }
+
+            foreach (var message in AiChatMessages)
+                message.RefreshLocalization();
+
+            foreach (var card in CardItems)
+                card.RefreshLocalization();
+        }
+
+        private static string NormalizeJapanesePrompt(string prompt)
+        {
+            if (!JapaneseCharacterRegex.IsMatch(prompt))
+                return prompt;
+
+            var terms = new List<string>();
+            var searchablePrompt = prompt;
+
+            if (JapaneseNoDarkEdgeRegex.IsMatch(searchablePrompt))
+            {
+                AddUnique(terms, "no dark edges");
+                searchablePrompt = JapaneseNoDarkEdgeRegex.Replace(searchablePrompt, " ");
+            }
+            else if (JapaneseNoEdgeRegex.IsMatch(searchablePrompt))
+            {
+                AddUnique(terms, "no edges");
+                searchablePrompt = JapaneseNoEdgeRegex.Replace(searchablePrompt, " ");
+            }
+
+            var colorPrompt = searchablePrompt;
+            var cyanPhrases = new[] { "水色", "青緑", "ターコイズ" };
+            if (ContainsAny(colorPrompt, cyanPhrases))
+            {
+                AddUnique(terms, "cyan");
+                foreach (var phrase in cyanPhrases)
+                    colorPrompt = colorPrompt.Replace(phrase, " ");
+            }
+
+            AddMappedJapaneseTerm(terms, colorPrompt, "black", "黒", "ブラック");
+            AddMappedJapaneseTerm(terms, colorPrompt, "white", "白", "ホワイト");
+            AddMappedJapaneseTerm(terms, colorPrompt, "cream", "クリーム", "ベージュ");
+            AddMappedJapaneseTerm(terms, colorPrompt, "brown", "茶色", "褐色", "ブラウン");
+            AddMappedJapaneseTerm(terms, colorPrompt, "red", "赤", "レッド");
+            AddMappedJapaneseTerm(terms, colorPrompt, "orange", "橙", "オレンジ");
+            AddMappedJapaneseTerm(terms, colorPrompt, "yellow", "黄色", "イエロー", "金色");
+            AddMappedJapaneseTerm(terms, colorPrompt, "green", "緑", "グリーン");
+            AddMappedJapaneseTerm(terms, colorPrompt, "blue", "青", "藍色", "紺色", "ブルー");
+            AddMappedJapaneseTerm(terms, colorPrompt, "purple", "紫", "パープル");
+            AddMappedJapaneseTerm(terms, colorPrompt, "pink", "ピンク", "桃色");
+            AddMappedJapaneseTerm(terms, colorPrompt, "gray", "灰色", "グレー");
+
+            if (ContainsAny(searchablePrompt, "もっと暗", "より暗", "さらに暗"))
+                AddUnique(terms, "darker");
+            else
+                AddMappedJapaneseTerm(terms, searchablePrompt, "dark", "暗い", "濃い", "深い");
+
+            if (ContainsAny(searchablePrompt, "もっと明る", "より明る", "さらに明る", "もっと薄"))
+                AddUnique(terms, "lighter");
+            else
+                AddMappedJapaneseTerm(terms, searchablePrompt, "light", "明るい", "淡い", "薄い");
+
+            AddMappedJapaneseTerm(terms, searchablePrompt, "warm", "暖か", "温か", "温もり");
+            AddMappedJapaneseTerm(terms, searchablePrompt, "cool", "冷たい", "涼しい", "寒色");
+            AddMappedJapaneseTerm(terms, searchablePrompt, "glossy", "光沢", "艶", "つや");
+            AddMappedJapaneseTerm(terms, searchablePrompt, "matte", "マット", "つや消し", "艶消し");
+            AddMappedJapaneseTerm(terms, searchablePrompt, "textured", "粗い", "ざらざら", "凹凸");
+            AddMappedJapaneseTerm(terms, searchablePrompt, "smooth", "滑らか", "なめらか", "平滑");
+            AddMappedJapaneseTerm(terms, searchablePrompt, "speckled", "斑点", "まだら", "点々");
+            AddMappedJapaneseTerm(terms, searchablePrompt, "earthy", "素朴", "土っぽ", "自然な");
+
+            return terms.Count > 0 ? string.Join(" ", terms) : prompt;
+        }
+
+        private static void AddMappedJapaneseTerm(
+            List<string> terms,
+            string prompt,
+            string translatedTerm,
+            params string[] phrases)
+        {
+            if (ContainsAny(prompt, phrases))
+                AddUnique(terms, translatedTerm);
+        }
+
+        private static bool ContainsAny(string value, params string[] phrases)
+            => phrases.Any(value.Contains);
 
         private string ResolveAiConversationPrompt(string latestPrompt)
         {
@@ -780,6 +912,21 @@ namespace ASTEM_DB.ViewModels
         private static readonly Regex NoEdgeConstraintRegex = new(
             @"\b(?:no|without|avoid)\s+(?:edge|edges|border|borders|rim|rims|frame|outline)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
+        );
+
+        private static readonly Regex JapaneseCharacterRegex = new(
+            @"[\u3040-\u30ff\u3400-\u9fff]",
+            RegexOptions.Compiled
+        );
+
+        private static readonly Regex JapaneseNoDarkEdgeRegex = new(
+            @"(?:(?:暗い|黒い|茶色い)\s*(?:縁|ふち|エッジ).{0,6}(?:なし|ない|避け|除外)|(?:縁|ふち|エッジ).{0,4}(?:暗く|黒く|茶色く).{0,4}(?:なし|ない|避け|除外))",
+            RegexOptions.Compiled
+        );
+
+        private static readonly Regex JapaneseNoEdgeRegex = new(
+            @"(?:縁|ふち|エッジ).{0,6}(?:なし|ない|避け|除外)",
+            RegexOptions.Compiled
         );
 
         private static AiSearchWorkerClient? _aiSearchWorker;
